@@ -73,7 +73,8 @@ TF_SECONDS = { "1min": 60, "5min": 5 * 60, "15min": 15 * 60, "1hour": 60 * 60, "
 # 3. DATA FETCH (changed to Binance API)
 
 # ===============================
-
+exchange_info = client.get_exchange_info()
+print(f"Successfully fetched Binance exchange information.")
 def fetch_binance_ohlcv(symbol, timeframe_str, limit=HISTORY_LIMIT):
     interval = BINANCE_INTERVAL_MAP.get(timeframe_str)
     if not interval:
