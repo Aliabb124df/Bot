@@ -43,7 +43,7 @@ print(f"Defined SCORE_CONFIG: {SCORE_CONFIG}")
 TIMEFRAMES = ["15min", "1hour", "4hour", "5min", "1min"]
 BASE_TIMEFRAME = "15min"
 TIMEFRAME = BASE_TIMEFRAME
-HISTORY_LIMIT = 1000
+HISTORY_LIMIT = 500
 
 # Binance Client Initialization
 client = Client('', '', tld='us') # Initialized Binance client with 'us' TLD
