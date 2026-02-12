@@ -17,7 +17,29 @@ from telegram import Bot
 # 2. GLOBAL CONFIG
 
 # ===============================
+SCORE_CONFIG = {
+    # Bullish conditions points
+    'BULL_EMA_CROSS': 10,
+    'BULL_MACD_CROSS': 7,
+    'BULL_RSI_MOMENTUM': 5,
+    'BULL_STRONG_CANDLE': 12,
 
+    # Bearish conditions points
+    'BEAR_EMA_CROSS': 10,
+    'BEAR_MACD_CROSS': 7,
+    'BEAR_RSI_MOMENTUM': 5,
+    'BEAR_STRONG_CANDLE': 12,
+
+    # Penalties/adjustments
+    'PENALTY_HIGH_ATR_REGIME': -20, # Penalize signals during high volatility
+    'PENALTY_LOW_DIST_FROM_EMA': -3, # Minor penalty if too close to EMA (can be adjusted)
+
+    # Thresholds
+    'MIN_BULL_SCORE_THRESHOLD': 15, # Minimum score required for a bullish signal
+    'MIN_BEAR_SCORE_THRESHOLD': 15  # Minimum score required for a bearish signal
+}
+
+print(f"Defined SCORE_CONFIG: {SCORE_CONFIG}")
 TIMEFRAMES = ["15min", "1hour", "4hour", "5min", "1min"]
 BASE_TIMEFRAME = "15min"
 TIMEFRAME = BASE_TIMEFRAME
