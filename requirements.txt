@@ -1,0 +1,7 @@
+pandas
+numpy
+datetime
+TA-LIB
+nest_asyncio
+python-telegram-bot
+python-binance
