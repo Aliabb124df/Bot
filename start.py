@@ -46,7 +46,7 @@ TIMEFRAME = BASE_TIMEFRAME
 HISTORY_LIMIT = 500
 
 # Binance Client Initialization
-client = Client('', '', tld='us') # Initialized Binance client with 'us' TLD
+#client = Client('', '', tld='us') # Initialized Binance client with 'us' TLD
 
 # Map internal timeframe strings to Binance KLINE_INTERVAL constants
 BINANCE_INTERVAL_MAP = {
