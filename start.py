@@ -104,8 +104,8 @@ def fetch_binance_ohlcv(symbol, timeframe_str, limit=HISTORY_LIMIT):
         return pd.DataFrame()
     try:
         klines = client.get_historical_klines(symbol, interval, limit=limit)
-        if klines:
-            print(f"   ✅ Fetched {len(klines)} klines for {symbol} on {timeframe_str}")
+        #if klines:
+            #print(f"   ✅ Fetched {len(klines)} klines for {symbol} on {timeframe_str}")
     except Exception as e:
         print(f"❌ Error fetching Binance klines for {symbol} {timeframe_str}: {e}")
         return pd.DataFrame()
