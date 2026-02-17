@@ -70,7 +70,7 @@ TELEGRAM_CHAT_ID = "1378561635"
 
 # Spread / Risk controls
 
-CONSIDER_SPREAD = False
+CONSIDER_SPREAD = True 
 SPREAD_PERCENTAGE = 0.0005
 STOP_LOSS_MAX_PERCENTAGE = 0.02  # 2% max default
 TAKE_PROFIT_MIN_PERCENTAGE = 0.005
@@ -590,27 +590,27 @@ def portfolio_live_runner(symbols):
         new_open_trades = []
         closed_count = 0
         for trade in portfolio.open_trades:
-        if CONSIDER_SPREAD:
-            bid, ask, price_time = fetch_binance_bid_ask(trade['symbol'])
-            if bid is None or ask is None:
-                print(f"⚠️ No bid/ask for {trade['symbol']}. Keeping open.")
-                new_open_trades.append(trade)
-                continue
+            if CONSIDER_SPREAD:
+                bid, ask, price_time = fetch_binance_bid_ask(trade['symbol'])
+                if bid is None or ask is None:
+                    print(f"⚠️ No bid/ask for {trade['symbol']}. Keeping open.")
+                    new_open_trades.append(trade)
+                    continue
 
-            current_bid = bid
-            current_ask = ask
-            price_time_str = price_time.strftime('%Y-%m-%d %H:%M:%S UTC')
+                current_bid = bid
+                current_ask = ask
+                price_time_str = price_time.strftime('%Y-%m-%d %H:%M:%S UTC')
 
-        else:
-            ohlcv_df = fetch_binance_ohlcv(trade['symbol'], TIMEFRAME, limit=1)
-            if ohlcv_df.empty:
-                print(f"⚠️ No OHLCV for {trade['symbol']}. Keeping open.")
-                new_open_trades.append(trade)
-                continue
+            else:
+                ohlcv_df = fetch_binance_ohlcv(trade['symbol'], TIMEFRAME, limit=1)
+                if ohlcv_df.empty:
+                    print(f"⚠️ No OHLCV for {trade['symbol']}. Keeping open.")
+                    new_open_trades.append(trade)
+                    continue
 
-            price_time = ohlcv_df.index[-1].to_pydatetime()
-            price_time_str = price_time.strftime('%Y-%m-%d %H:%M:%S UTC')
-            current_bid = current_ask = ohlcv_df['close'].iloc[-1]
+                price_time = ohlcv_df.index[-1].to_pydatetime()
+                price_time_str = price_time.strftime('%Y-%m-%d %H:%M:%S UTC')
+                current_bid = current_ask = ohlcv_df['close'].iloc[-1]
             closed = False
             if trade['direction'] == 'BUY':
                 if current_bid <= trade['sl']:
