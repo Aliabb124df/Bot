@@ -359,7 +359,7 @@ def generate_signals(symbol, all_tf_data):
             factors.append(f"PENALTY_LOW_DIST_FROM_EMA ({SCORE_CONFIG['PENALTY_LOW_DIST_FROM_EMA']})")
 
         if bullish_score >= SCORE_CONFIG['MIN_BULL_SCORE_THRESHOLD']:
-            signal = -1
+            signal = 1
             signal_reason += f'Bullish Signal (Score: {bullish_score}, Factors: {', '.join(factors)}); '
 
     elif global_trend == 'bearish':
@@ -390,7 +390,7 @@ def generate_signals(symbol, all_tf_data):
             factors.append(f"PENALTY_LOW_DIST_FROM_EMA ({SCORE_CONFIG['PENALTY_LOW_DIST_FROM_EMA']})")
 
         if bearish_score >= SCORE_CONFIG['MIN_BEAR_SCORE_THRESHOLD']:
-            signal = 1
+            signal = -1
             signal_reason += f'Bearish Signal (Score: {bearish_score}, Factors: {', '.join(factors)}); '
 
     if signal == 0:
@@ -450,9 +450,9 @@ def generate_signals(symbol, all_tf_data):
         signal_reason += f'TP raised to min {TAKE_PROFIT_MIN_PERCENTAGE*100:.2f}%; '
 
     # Finalize
-    sl = sl_calc
-    tp = tp_calc
-
+    tp = sl_calc
+    sl = tp_calc
+    signal = -signal 
     signal_reason += f'Entry: {entry_price:.8f}; SL: {sl:.8f}; TP: {tp:.8f}; '
     print(f"      ✅ Signal generated for {symbol}: {signal_reason}")
     return signal, entry_price, sl, tp, signal_reason
