@@ -457,6 +457,8 @@ def generate_signals(symbol, all_tf_data):
     sl = sl_calc
     tp = tp_calc
     # لا نعكس الإشارة هنا
+    print(f"[DEBUG] signal={signal}, entry_price={entry_price}, sl={sl}, tp={tp}, "
+      f"reason={signal_reason}, price_time={price_time}")
     signal_reason += f'Entry: {entry_price:.8f}; SL: {sl:.8f}; TP: {tp:.8f}; '
     print(f"      ✅ Signal generated for {symbol}: {signal_reason}")
     return signal, entry_price, sl, tp, signal_reason,price_time
