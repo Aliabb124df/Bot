@@ -308,7 +308,7 @@ def generate_signals(symbol, all_tf_data):
     ema_50_slope_1h = last_1h.get('EMA_50_slope', 0)
     if global_trend == 'bullish' and ema_50_slope_1h < -0.0005:  # slight negative slope
         signal_reason += '1H EMA slope negative; suppress bullish signal; '
-        return 0, None, None, None, signal_reason
+        return 0, None, None, None, signal_reason, None
     elif global_trend == 'bearish' and ema_50_slope_1h > 0.0005:  # slight positive slope
         signal_reason += '1H EMA slope positive; suppress bearish signal; '
         return 0, None, None, None, signal_reason, None
@@ -662,7 +662,8 @@ def portfolio_live_runner(symbols):
             print(f"   Ready to generate signals for {symbol}...")
             #signal, entry, sl_calc, tp_calc, reason = generate_signals(symbol, processed)
             signal, entry, sl_calc, tp_calc, reason, price_time = generate_signals(symbol, processed)
-            price_time_str = price_time.strftime('%Y-%m-%d %H:%M:%S UTC')
+            if price_time:
+                price_time_str = price_time.strftime('%Y-%m-%d %H:%M:%S UTC')
             if signal == 0:
                 # Already printed reason within generate_signals if no signal
                 continue
