@@ -281,14 +281,14 @@ def generate_signals(symbol, all_tf_data):
     if df_1h is None or df_4h is None or df_1h.empty or df_4h.empty:
         signal_reason += 'Missing higher timeframe data; '
         print(f"      ❌ Skipping signal generation for {symbol}: {signal_reason}")
-        return 0, None, None, None, signal_reason
+        return 0, None, None, None, signal_reason, None
 
     # Ensure EMA_100 present
     for tf_df in (df_1h, df_4h):
         if 'EMA_100' not in tf_df.columns or tf_df['EMA_100'].isnull().all():
             signal_reason += 'EMA_100 not ready on higher TFs; '
             print(f"      ❌ Skipping signal generation for {symbol}: {signal_reason}")
-            return 0, None, None, None, signal_reason
+            return 0, None, None, None, signal_reason, None
 
     last_1h = df_1h.iloc[-1]
     last_4h = df_4h.iloc[-1]
@@ -311,20 +311,20 @@ def generate_signals(symbol, all_tf_data):
         return 0, None, None, None, signal_reason
     elif global_trend == 'bearish' and ema_50_slope_1h > 0.0005:  # slight positive slope
         signal_reason += '1H EMA slope positive; suppress bearish signal; '
-        return 0, None, None, None, signal_reason
+        return 0, None, None, None, signal_reason, None
 
     # --- Base timeframe primary decision ---
     df_base = all_tf_data.get(BASE_TIMEFRAME)
     if df_base is None or df_base.empty:
         signal_reason += f'Missing {BASE_TIMEFRAME}; '
         print(f"      ❌ Skipping signal generation for {symbol}: {signal_reason}")
-        return 0, None, None, None, signal_reason
+        return 0, None, None, None, signal_reason, None
 
     valid_df = df_base.dropna()
     if len(valid_df) < 2:
         signal_reason += "Not enough valid bars; "
         print(f"      ❌ Skipping signal generation for {symbol}: {signal_reason}")
-        return 0, None, None, None, signal_reason
+        return 0, None, None, None, signal_reason, None
 
     last = valid_df.iloc[-1]
     prev = valid_df.iloc[-2]
@@ -334,7 +334,7 @@ def generate_signals(symbol, all_tf_data):
         if col not in df_base.columns or df_base[col].isnull().all() or pd.isna(last.get(col)):
             signal_reason += f'{col} not ready on {BASE_TIMEFRAME}; '
             print(f"      ❌ Skipping signal generation for {symbol}: {signal_reason}")
-            return 0, None, None, None, signal_reason
+            return 0, None, None, None, signal_reason, None
 
     # --- Scoring Logic with EMA slope usage ---
     slope_factor = 1.0
@@ -407,7 +407,7 @@ def generate_signals(symbol, all_tf_data):
         elif global_trend == 'bearish':
             signal_reason += f'No bearish signal (Score: {bearish_score:.2f}, Threshold: {SCORE_CONFIG["MIN_BEAR_SCORE_THRESHOLD"]}); '
         print(f"      ℹ️ No signal generated for {symbol}: {signal_reason}")
-        return 0, None, None, None, signal_reason
+        return 0, None, None, None, signal_reason, None
 
     # --- Entry / SL / TP ---
     entry_df = None
@@ -415,7 +415,7 @@ def generate_signals(symbol, all_tf_data):
         bid, ask , price_time = fetch_binance_bid_ask(symbol)
         if bid is None or ask is None or pd.isna(bid) or pd.isna(ask):
             signal_reason += 'Could not fetch bid/ask; '
-            return 0, None, None, None, signal_reason
+            return 0, None, None, None, signal_reason, None
         if signal == 1:
             entry_price = ask
         else:
@@ -427,7 +427,7 @@ def generate_signals(symbol, all_tf_data):
     if pd.isna(atr) or atr <= 0:
         signal_reason += 'ATR invalid; '
         print(f"      ❌ Skipping signal for {symbol}: {signal_reason}")
-        return 0, None, None, None, signal_reason
+        return 0, None, None, None, signal_reason, None
 
     if signal == 1:
         sl_calc = entry_price - ATR_SL_FACTOR * atr
