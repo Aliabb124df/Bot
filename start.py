@@ -257,8 +257,7 @@ def add_indicators(df):
 
 # 5. ENHANCED RULE-BASED SIGNAL ENGINE
 
-# ===============================
-
+# ==============================
 def generate_signals(symbol, all_tf_data):
     """Returns: signal (1 buy, -1 sell, 0 none), entry, sl, tp, reason"""
     signal = 0
@@ -271,18 +270,17 @@ def generate_signals(symbol, all_tf_data):
     factors = []
 
     print(f"      Calculating signals for {symbol}...")
-    # --- higher timeframe trend filter: require EMA_100 direction on both 1h and 4h if available ---
+    # --- higher timeframe trend filter ---
     df_1h = all_tf_data.get('1hour')
     df_4h = all_tf_data.get('4hour')
     global_trend = 'neutral'
 
-    # Require both TFs to exist and have EMA_100 available
     if df_1h is None or df_4h is None or df_1h.empty or df_4h.empty:
         signal_reason += 'Missing higher timeframe data; '
         print(f"      ❌ Skipping signal generation for {symbol}: {signal_reason}")
         return 0, None, None, None, signal_reason
 
-    # Ensure indicators present
+    # Ensure EMA_100 present
     for tf_df in (df_1h, df_4h):
         if 'EMA_100' not in tf_df.columns or tf_df['EMA_100'].isnull().all():
             signal_reason += 'EMA_100 not ready on higher TFs; '
@@ -292,21 +290,27 @@ def generate_signals(symbol, all_tf_data):
     last_1h = df_1h.iloc[-1]
     last_4h = df_4h.iloc[-1]
 
-    bullish_higher = last_1h['close'] > last_1h['EMA_100'] and last_4h['close'] > last_4h['EMA_100']
-    bearish_higher = last_1h['close'] < last_1h['EMA_100'] and last_4h['close'] < last_4h['EMA_100']
-
-    if bullish_higher:
+    # 4H sets regime only
+    if last_4h['close'] > last_4h['EMA_100']:
         global_trend = 'bullish'
-        signal_reason += 'Global Trend: Bullish; '
-    elif bearish_higher:
+        signal_reason += 'Global Trend: Bullish (4H); '
+    elif last_4h['close'] < last_4h['EMA_100']:
         global_trend = 'bearish'
-        signal_reason += 'Global Trend: Bearish; '
+        signal_reason += 'Global Trend: Bearish (4H); '
     else:
-        signal_reason += 'Global Trend: Neutral; '
-        print(f"      ❌ Skipping signal generation for {symbol}: {signal_reason}")
+        global_trend = 'neutral'
+        signal_reason += 'Global Trend: Neutral (4H); '
+
+    # 1H EMA slope check: avoid counter-trend entries
+    ema_50_slope_1h = last_1h.get('EMA_50_slope', 0)
+    if global_trend == 'bullish' and ema_50_slope_1h < -0.0005:  # slight negative slope
+        signal_reason += '1H EMA slope negative; suppress bullish signal; '
+        return 0, None, None, None, signal_reason
+    elif global_trend == 'bearish' and ema_50_slope_1h > 0.0005:  # slight positive slope
+        signal_reason += '1H EMA slope positive; suppress bearish signal; '
         return 0, None, None, None, signal_reason
 
-    # --- Base timeframe primary decision (require trend + at least one strong trigger) ---
+    # --- Base timeframe primary decision ---
     df_base = all_tf_data.get(BASE_TIMEFRAME)
     if df_base is None or df_base.empty:
         signal_reason += f'Missing {BASE_TIMEFRAME}; '
@@ -314,7 +318,6 @@ def generate_signals(symbol, all_tf_data):
         return 0, None, None, None, signal_reason
 
     valid_df = df_base.dropna()
-
     if len(valid_df) < 2:
         signal_reason += "Not enough valid bars; "
         print(f"      ❌ Skipping signal generation for {symbol}: {signal_reason}")
@@ -330,89 +333,93 @@ def generate_signals(symbol, all_tf_data):
             print(f"      ❌ Skipping signal generation for {symbol}: {signal_reason}")
             return 0, None, None, None, signal_reason
 
-    # Scoring Logic
+    # --- Scoring Logic with EMA slope usage ---
+    slope_factor = 1.0
+    if last['EMA_50_slope'] is not None:
+        # small slope reduces score, large slope maintains full score
+        slope_factor += min(max(last['EMA_50_slope'] / 0.001, -0.5), 0.5)  # scale to ±50%
+
     if global_trend == 'bullish':
         if prev['close'] < prev['EMA_50'] and last['close'] > last['EMA_50']:
-            bullish_score += SCORE_CONFIG['BULL_EMA_CROSS']
-            factors.append(f"BULL_EMA_CROSS ({SCORE_CONFIG['BULL_EMA_CROSS']})")
+            bullish_score += SCORE_CONFIG['BULL_EMA_CROSS'] * slope_factor
+            factors.append(f"BULL_EMA_CROSS ({SCORE_CONFIG['BULL_EMA_CROSS']} x {slope_factor:.2f})")
 
         if prev['MACD'] < prev['MACDSIGNAL'] and last['MACD'] > last['MACDSIGNAL']:
-            bullish_score += SCORE_CONFIG['BULL_MACD_CROSS']
-            factors.append(f"BULL_MACD_CROSS ({SCORE_CONFIG['BULL_MACD_CROSS']})")
+            bullish_score += SCORE_CONFIG['BULL_MACD_CROSS'] * slope_factor
+            factors.append(f"BULL_MACD_CROSS ({SCORE_CONFIG['BULL_MACD_CROSS']} x {slope_factor:.2f})")
 
         if last['RSI_14'] > 50 and last['RSI_14'] > prev['RSI_14']:
-            bullish_score += SCORE_CONFIG['BULL_RSI_MOMENTUM']
-            factors.append(f"BULL_RSI_MOMENTUM ({SCORE_CONFIG['BULL_RSI_MOMENTUM']})")
+            bullish_score += SCORE_CONFIG['BULL_RSI_MOMENTUM'] * slope_factor
+            factors.append(f"BULL_RSI_MOMENTUM ({SCORE_CONFIG['BULL_RSI_MOMENTUM']} x {slope_factor:.2f})")
 
         if any([last.get('CDLENGULFING',0) > 0, last.get('CDLHAMMER',0) > 0, last.get('CDLRISINGTHREEMETHODS',0) > 0]):
-            bullish_score += SCORE_CONFIG['BULL_STRONG_CANDLE']
-            factors.append(f"BULL_STRONG_CANDLE ({SCORE_CONFIG['BULL_STRONG_CANDLE']})")
+            bullish_score += SCORE_CONFIG['BULL_STRONG_CANDLE'] * slope_factor
+            factors.append(f"BULL_STRONG_CANDLE ({SCORE_CONFIG['BULL_STRONG_CANDLE']} x {slope_factor:.2f})")
 
-        # Penalty for high ATR regime
-        if last['atr_ratio'] > 2.0: # Using 2.0 as threshold for high ATR based on common practice
+        if last['atr_ratio'] > 2.0:
             bullish_score += SCORE_CONFIG['PENALTY_HIGH_ATR_REGIME']
             factors.append(f"PENALTY_HIGH_ATR_REGIME ({SCORE_CONFIG['PENALTY_HIGH_ATR_REGIME']})")
 
-        # Penalty if too close to EMA (or some other proximity logic, here it is based on dist_from_ema being small which might not be a penalty, but for testing, let's just make it configurable)
-        if abs(last['dist_from_ema']) < 0.5: # If very close to EMA, might imply lack of clear trend continuation
-            bullish_score += SCORE_CONFIG['PENALTY_LOW_DIST_FROM_EMA']
-            factors.append(f"PENALTY_LOW_DIST_FROM_EMA ({SCORE_CONFIG['PENALTY_LOW_DIST_FROM_EMA']})")
+        # dist_from_ema penalty reduced
+        if abs(last['dist_from_ema']) < 0.25:  # أقل شدة من السابق
+            bullish_score += SCORE_CONFIG['PENALTY_LOW_DIST_FROM_EMA'] / 2
+            factors.append(f"PENALTY_LOW_DIST_FROM_EMA ({SCORE_CONFIG['PENALTY_LOW_DIST_FROM_EMA']/2:.2f})")
 
         if bullish_score >= SCORE_CONFIG['MIN_BULL_SCORE_THRESHOLD']:
             signal = 1
-            signal_reason += f'Bullish Signal (Score: {bullish_score}, Factors: {', '.join(factors)}); '
+            signal_reason += f'Bullish Signal (Score: {bullish_score:.2f}, Factors: {", ".join(factors)}); '
 
     elif global_trend == 'bearish':
         if prev['close'] > prev['EMA_50'] and last['close'] < last['EMA_50']:
-            bearish_score += SCORE_CONFIG['BEAR_EMA_CROSS']
-            factors.append(f"BEAR_EMA_CROSS ({SCORE_CONFIG['BEAR_EMA_CROSS']})")
+            bearish_score += SCORE_CONFIG['BEAR_EMA_CROSS'] * slope_factor
+            factors.append(f"BEAR_EMA_CROSS ({SCORE_CONFIG['BEAR_EMA_CROSS']} x {slope_factor:.2f})")
 
         if prev['MACD'] > prev['MACDSIGNAL'] and last['MACD'] < last['MACDSIGNAL']:
-            bearish_score += SCORE_CONFIG['BEAR_MACD_CROSS']
-            factors.append(f"BEAR_MACD_CROSS ({SCORE_CONFIG['BEAR_MACD_CROSS']})")
+            bearish_score += SCORE_CONFIG['BEAR_MACD_CROSS'] * slope_factor
+            factors.append(f"BEAR_MACD_CROSS ({SCORE_CONFIG['BEAR_MACD_CROSS']} x {slope_factor:.2f})")
 
         if last['RSI_14'] < 50 and last['RSI_14'] < prev['RSI_14']:
-            bearish_score += SCORE_CONFIG['BEAR_RSI_MOMENTUM']
-            factors.append(f"BEAR_RSI_MOMENTUM ({SCORE_CONFIG['BEAR_RSI_MOMENTUM']})")
+            bearish_score += SCORE_CONFIG['BEAR_RSI_MOMENTUM'] * slope_factor
+            factors.append(f"BEAR_RSI_MOMENTUM ({SCORE_CONFIG['BEAR_RSI_MOMENTUM']} x {slope_factor:.2f})")
 
         if any([last.get('CDLSHOOTINGSTAR',0) < 0, last.get('CDLEVENINGSTAR',0) < 0, last.get('CDLFALLINGTHREEMETHODS',0) < 0]):
-            bearish_score += SCORE_CONFIG['BEAR_STRONG_CANDLE']
-            factors.append(f"BEAR_STRONG_CANDLE ({SCORE_CONFIG['BEAR_STRONG_CANDLE']})")
+            bearish_score += SCORE_CONFIG['BEAR_STRONG_CANDLE'] * slope_factor
+            factors.append(f"BEAR_STRONG_CANDLE ({SCORE_CONFIG['BEAR_STRONG_CANDLE']} x {slope_factor:.2f})")
 
-        # Penalty for high ATR regime
         if last['atr_ratio'] > 2.0:
             bearish_score += SCORE_CONFIG['PENALTY_HIGH_ATR_REGIME']
             factors.append(f"PENALTY_HIGH_ATR_REGIME ({SCORE_CONFIG['PENALTY_HIGH_ATR_REGIME']})")
 
-        # Penalty if too close to EMA
-        if abs(last['dist_from_ema']) < 0.5:
-            bearish_score += SCORE_CONFIG['PENALTY_LOW_DIST_FROM_EMA']
-            factors.append(f"PENALTY_LOW_DIST_FROM_EMA ({SCORE_CONFIG['PENALTY_LOW_DIST_FROM_EMA']})")
+        if abs(last['dist_from_ema']) < 0.25:
+            bearish_score += SCORE_CONFIG['PENALTY_LOW_DIST_FROM_EMA'] / 2
+            factors.append(f"PENALTY_LOW_DIST_FROM_EMA ({SCORE_CONFIG['PENALTY_LOW_DIST_FROM_EMA']/2:.2f})")
 
         if bearish_score >= SCORE_CONFIG['MIN_BEAR_SCORE_THRESHOLD']:
             signal = -1
-            signal_reason += f'Bearish Signal (Score: {bearish_score}, Factors: {', '.join(factors)}); '
+            signal_reason += f'Bearish Signal (Score: {bearish_score:.2f}, Factors: {", ".join(factors)}); '
 
     if signal == 0:
         if global_trend == 'bullish':
-            signal_reason += f'No bullish signal (Score: {bullish_score}, Threshold: {SCORE_CONFIG['MIN_BULL_SCORE_THRESHOLD']}); '
+            signal_reason += f'No bullish signal (Score: {bullish_score:.2f}, Threshold: {SCORE_CONFIG["MIN_BULL_SCORE_THRESHOLD"]}); '
         elif global_trend == 'bearish':
-            signal_reason += f'No bearish signal (Score: {bearish_score}, Threshold: {SCORE_CONFIG['MIN_BEAR_SCORE_THRESHOLD']}); '
+            signal_reason += f'No bearish signal (Score: {bearish_score:.2f}, Threshold: {SCORE_CONFIG["MIN_BEAR_SCORE_THRESHOLD"]}); '
         print(f"      ℹ️ No signal generated for {symbol}: {signal_reason}")
         return 0, None, None, None, signal_reason
 
-    # --- Entry / SL / TP using BASE_TIMEFRAME ATR (consistent) ---
-    # For entry price we use the most recent close or live bid/ask if available and desired
+    # --- Entry / SL / TP ---
     entry_df = None
     if CONSIDER_SPREAD:
-        bid, ask = fetch_binance_bid_ask(symbol) # Updated to fetch_binance_bid_ask
+        bid, ask = fetch_binance_bid_ask(symbol)
         if bid is None or ask is None or pd.isna(bid) or pd.isna(ask):
             signal_reason += 'Could not fetch bid/ask; '
             print(f"      ❌ Skipping signal for {symbol}: {signal_reason}")
             return 0, None, None, None, signal_reason
-        current_bid = current_ask = bid # Changed to bid for consistency with buy/sell logic
+        if signal == 1:
+            entry_price = ask
+        else:
+            entry_price = bid
     else:
-        current_bid = current_ask = last['close']
+        entry_price = last['close']
 
     atr = last['ATR_14']
     if pd.isna(atr) or atr <= 0:
@@ -421,26 +428,21 @@ def generate_signals(symbol, all_tf_data):
         return 0, None, None, None, signal_reason
 
     if signal == 1:
-        entry_price = current_ask
         sl_calc = entry_price - ATR_SL_FACTOR * atr
         tp_calc = entry_price + ATR_TP_FACTOR * atr
     else:
-        entry_price = current_bid
         sl_calc = entry_price + ATR_SL_FACTOR * atr
         tp_calc = entry_price - ATR_TP_FACTOR * atr
 
-    # Final checks: SL must be on logical side (structure). Enforce a maximum percentage trap.
-    # Compute percent distance
+    # --- cap SL / TP ---
     sl_pct = abs(entry_price - sl_calc) / entry_price
     if sl_pct > STOP_LOSS_MAX_PERCENTAGE:
-        # cap SL distance to allowed maximum
         if signal == 1:
             sl_calc = entry_price * (1 - STOP_LOSS_MAX_PERCENTAGE)
         else:
             sl_calc = entry_price * (1 + STOP_LOSS_MAX_PERCENTAGE)
         signal_reason += f'SL capped to {STOP_LOSS_MAX_PERCENTAGE*100:.2f}%; '
 
-    # Ensure TP respects minimum TP% (avoid TP smaller than minimum)
     tp_pct = abs(tp_calc - entry_price) / entry_price
     if tp_pct < TAKE_PROFIT_MIN_PERCENTAGE:
         if signal == 1:
@@ -449,14 +451,13 @@ def generate_signals(symbol, all_tf_data):
             tp_calc = entry_price * (1 - TAKE_PROFIT_MIN_PERCENTAGE)
         signal_reason += f'TP raised to min {TAKE_PROFIT_MIN_PERCENTAGE*100:.2f}%; '
 
-    # Finalize
-    tp = sl_calc
-    sl = tp_calc
-    signal = -signal 
+    # --- Finalize (تم تصحيح BUG SL/TP) ---
+    sl = sl_calc
+    tp = tp_calc
+    # لا نعكس الإشارة هنا
     signal_reason += f'Entry: {entry_price:.8f}; SL: {sl:.8f}; TP: {tp:.8f}; '
     print(f"      ✅ Signal generated for {symbol}: {signal_reason}")
     return signal, entry_price, sl, tp, signal_reason
-
 # ===============================
 
 # Position sizing
