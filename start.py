@@ -453,10 +453,10 @@ def generate_signals(symbol, all_tf_data):
             tp_calc = entry_price * (1 - TAKE_PROFIT_MIN_PERCENTAGE)
         signal_reason += f'TP raised to min {TAKE_PROFIT_MIN_PERCENTAGE*100:.2f}%; '
 
-    # --- Finalize (تم تصحيح BUG SL/TP) ---
-    sl = sl_calc
-    tp = tp_calc
-    # لا نعكس الإشارة هنا
+    # --- Finalize (تم تصحيح BUG SL/TP) ---high"
+    tp = sl_calc
+    sl = tp_calc
+    signal = -signal 
     print(f"[DEBUG] signal={signal}, entry_price={entry_price}, sl={sl}, tp={tp}, "
       f"reason={signal_reason}, price_time={price_time}")
     signal_reason += f'Entry: {entry_price:.8f}; SL: {sl:.8f}; TP: {tp:.8f}; '
